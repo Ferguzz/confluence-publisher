@@ -97,6 +97,14 @@ class ConfluencePageManager(ConfluenceManager):
 
         return p
 
+    def exists(self, page):
+        # I'm pretty sure that a space and title identifies a unique page, so we can set limit to 1.
+        ret = self._api.list_content(page.space_key, title=page.title, limit=1)
+        if len(ret['results']) == 0:
+            return False
+        else:
+            return ret['results'][0]['id']
+
     def create(self, page):
         ancestor = page.ancestors[-1]
 

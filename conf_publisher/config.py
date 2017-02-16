@@ -1,5 +1,4 @@
 import copy
-from collections import OrderedDict
 
 from .errors import ConfigError
 from .serializers import yaml_serializer
@@ -34,6 +33,7 @@ class Config(object):
 class PageConfig(object):
     def __init__(self):
         self.id = None
+        self.parent_id = None
 
         self.title = None
         self.source = None
@@ -126,7 +126,7 @@ class ConfigLoader:
     def _page_from_dict(cls, page_dict):
         page_config = PageConfig()
 
-        for attr in ('id', 'title', 'source', 'link', 'watermark'):
+        for attr in ('parent_id', 'title', 'source', 'link', 'watermark'):
             if attr in page_dict:
                 setattr(page_config, attr, page_dict[attr])
 
@@ -145,70 +145,6 @@ class ConfigLoader:
         attach = attach_class()
         attach.path = attach_path
         return attach
-
-
-class ConfigDumper:
-    @classmethod
-    def to_yaml_file(cls, config, config_path):
-        with open(config_path, 'w') as f:
-            cls.to_yaml_string(config, stream=f)
-
-    @classmethod
-    def to_yaml_string(cls, config, stream=None):
-        return yaml_serializer.dump(cls.to_dict(config), stream=stream)
-
-    @classmethod
-    def to_dict(cls, config):
-        config_dict = OrderedDict(version=2)
-
-        for attr in ('url', 'base_dir', 'downloads_dir', 'images_dir', 'source_ext'):
-            attr_value = getattr(config, attr)
-            if attr_value:
-                config_dict[attr] = attr_value
-
-        config_dict['pages'] = cls._pages_to_list(config.pages)
-
-        return config_dict
-
-    @classmethod
-    def _pages_to_list(cls, pages_config):
-        pages = list()
-        for page_config in pages_config:
-            pages.append(cls._page_to_dict(page_config))
-        return pages
-
-    @classmethod
-    def _page_to_dict(cls, page_config):
-        page_dict = OrderedDict()
-
-        for attr in ('id', 'title', 'source', 'link', 'watermark'):
-            attr_value = getattr(page_config, attr)
-            if attr_value:
-                page_dict[attr] = attr_value
-
-        if len(page_config.images) + len(page_config.downloads):
-            page_dict['attachments'] = OrderedDict()
-        if len(page_config.images):
-            page_dict['attachments']['images'] = cls._attaches_to_path(page_config.images)
-        if len(page_config.images):
-            page_dict['attachments']['downloads'] = cls._attaches_to_path(page_config.downloads)
-
-        pages = cls._pages_to_list(page_config.pages)
-        if len(pages):
-            page_dict['pages'] = pages
-
-        return page_dict
-
-    @classmethod
-    def _attaches_to_path(cls, attaches):
-        attaches_list = []
-        for attach_config in attaches:
-            attaches_list.append(cls._attach_to_path(attach_config))
-        return attaches_list
-
-    @staticmethod
-    def _attach_to_path(attach_config):
-        return attach_config.path
 
 
 def flatten_page_config_list(pages):

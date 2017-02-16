@@ -10,6 +10,7 @@ from .constants import DEFAULT_CONFLUENCE_API_VERSION, DEFAULT_WATERMARK_CONTENT
 from .data_providers.sphinx_fjson_data_provider import SphinxFJsonDataProvider
 from .data_providers.sphinx_html_data_provider import SphinxHTMLDataProvider
 from .mutators.page_mutator import WatermarkPageMutator, LinkPageMutator, AnchorPageMutator
+from .page_maker import make_pages
 
 
 def get_data_provider_class(config):
@@ -177,7 +178,7 @@ def main():
                                                             'all watermarks; or "True" to add watermarks'
                                                             'with default text: "{}" on all pages.'.format(DEFAULT_WATERMARK_CONTENT))
     parser.add_argument('-l', '--link', type=str, help='Overrides page link. If value is "False" then removes the link.')
-    parser.add_argument('-ht', '--hold-titles', action='store_true', help='Do not change page titles while publishing.')
+    # parser.add_argument('-ht', '--hold-titles', action='store_true', help='Do not change page titles while publishing.')
     parser.add_argument('-v', '--verbose', action='count')
 
     args = parser.parse_args()
@@ -189,6 +190,10 @@ def main():
     setup_config_overrides(config, args.url, args.watermark, args.link)
 
     confluence_api = create_confluence_api(DEFAULT_CONFLUENCE_API_VERSION, config.url, auth)
+
+    page_manager = ConfluencePageManager(confluence_api)
+    make_pages(config, page_manager)
+
     publisher = create_publisher(config, confluence_api)
     publisher.publish(args.force, args.watermark, args.hold_titles)
 
