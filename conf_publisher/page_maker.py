@@ -1,5 +1,6 @@
 from . import log
 from .confluence import Page, Ancestor
+from .errors import ConfigError
 
 
 def setup_config_overrides(config, url=None):
@@ -33,20 +34,30 @@ def make_page(parent_page, title, page_manager):
     return int(page_id)
 
 
-def make_pages(config, page_manager, parent_id=None):
+def make_pages(validate_only, config, page_manager, parent_id=None):
     parent_page = None
-    if parent_id:
+    if parent_id and not validate_only:
         parent_page = page_manager.load(parent_id)
 
     for page_config in config.pages:
         cur_parent_id = parent_id or page_config.parent_id
         if not cur_parent_id:
-            log.warning('Page without parent page. Skip. Page title: {page_title}'.format(page_title=page_config.title))
+            message = 'Page without parent page. Skip. Page title: {page_title}'.format(page_title=page_config.title)
+            if validate_only:
+                raise ConfigError(message)
+            log.warning(message)
         elif not page_config.title:
-            log.warning('Page without title. Skip. Parent page id: {cur_parent_id}.'.format(parent_id=parent_id))
+            message = 'Page without title. Skip. Parent page id: {cur_parent_id}.'.format(cur_parent_id=cur_parent_id)
+            if validate_only:
+                raise ConfigError(message)
+            log.warning(message)
         else:
-            cur_parent_page = parent_page or page_manager.load(cur_parent_id)
-            page_config.id = make_page(cur_parent_page, page_config.title, page_manager)
+            # Don't create any pages if we are only validating.
+            if validate_only:
+                page_config.id = 123
+            else:
+                cur_parent_page = parent_page or page_manager.load(cur_parent_id)
+                page_config.id = make_page(cur_parent_page, page_config.title, page_manager)
 
         if len(page_config.pages):
-            make_pages(page_config, page_manager, page_config.id)
+            make_pages(validate_only, page_config, page_manager, page_config.id)

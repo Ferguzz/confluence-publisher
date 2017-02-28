@@ -1,5 +1,6 @@
 import argparse
 import copy
+import os
 
 from . import log, setup_logger
 from .auth import parse_authentication
@@ -9,6 +10,7 @@ from .config import ConfigLoader, flatten_page_config_list, PageImageAattachment
 from .constants import DEFAULT_CONFLUENCE_API_VERSION, DEFAULT_WATERMARK_CONTENT
 from .data_providers.sphinx_fjson_data_provider import SphinxFJsonDataProvider
 from .data_providers.sphinx_html_data_provider import SphinxHTMLDataProvider
+from .errors import ConfigError
 from .mutators.page_mutator import WatermarkPageMutator, LinkPageMutator, AnchorPageMutator
 from .page_maker import make_pages
 
@@ -144,6 +146,16 @@ class Publisher(object):
         self._attachment_manager.publish(content_id, filename)
         log.info('Published to: %s' % content_id)
 
+    def verify_page_sources_and_attachments(self):
+        try:
+            for page_config in flatten_page_config_list(self._config.pages):
+                self._data_provider.get_source_data(self._data_provider.get_source(page_config.source))
+                for attachment_config in page_config.images + page_config.downloads:
+                    filename = self._page_attachment_file(attachment_config)
+                    assert os.path.exists(filename), filename
+        except (AssertionError, IOError) as e:
+            raise ConfigError('Missing source file: %s' % e)
+
 
 def setup_config_overrides(config, url=None, watermark=None, link=None):
     if url:
@@ -180,6 +192,7 @@ def main():
     parser.add_argument('-l', '--link', type=str, help='Overrides page link. If value is "False" then removes the link.')
     # parser.add_argument('-ht', '--hold-titles', action='store_true', help='Do not change page titles while publishing.')
     parser.add_argument('-v', '--verbose', action='count')
+    parser.add_argument('-V', '--validate-only', action='store_true', help='Check the config is valid; don\'t push anything to confluence.')
 
     args = parser.parse_args()
     auth = parse_authentication(args.auth, args.user)
@@ -189,13 +202,21 @@ def main():
 
     setup_config_overrides(config, args.url, args.watermark, args.link)
 
-    confluence_api = create_confluence_api(DEFAULT_CONFLUENCE_API_VERSION, config.url, auth)
+    if args.validate_only:
+        log.info('Running publish in "validate-only" mode; the page tree, source files and attachments will be '
+                 'validated, but nothing will be published...')
+        confluence_api = 'unusable api'
+    else:
+        confluence_api = create_confluence_api(DEFAULT_CONFLUENCE_API_VERSION, config.url, auth)
 
     page_manager = ConfluencePageManager(confluence_api)
-    make_pages(config, page_manager)
+    make_pages(args.validate_only, config, page_manager)
 
     publisher = create_publisher(config, confluence_api)
-    publisher.publish(args.force, args.watermark, True)
+    if args.validate_only:
+        publisher.verify_page_sources_and_attachments()
+    else:
+        publisher.publish(args.force, args.watermark, True)
 
 if __name__ == '__main__':
     main()
